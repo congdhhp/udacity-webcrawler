@@ -64,11 +64,12 @@ public final class CrawlResultWriter {
     Objects.requireNonNull(writer);
     // TODO: Fill in this method.
     ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+    mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);  // disable auto close result writer
 
     try {
       mapper.writeValue(writer, result);
     } catch (Exception e) {
+      System.err.println("Have some problem when writing crawl result");
       e.printStackTrace();
     }
   }
