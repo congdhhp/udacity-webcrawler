@@ -32,8 +32,9 @@ public final class ConfigurationLoader {
     // TODO: Fill in this method.
     try (Reader reader = Files.newBufferedReader(path)) {
       return read(reader);
-    } catch (IOException ex) {
-      ex.printStackTrace();
+    } catch (Exception e) {
+      System.err.println("Have some problem when loading configuration");
+      e.printStackTrace();
       return null;
     }
   }
@@ -49,14 +50,13 @@ public final class ConfigurationLoader {
     Objects.requireNonNull(reader);
     // TODO: Fill in this method
     ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+    mapper.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE); // disable auto close configuration reader
 
     try {
-      CrawlerConfiguration config;
-      config = mapper.readValue(reader, CrawlerConfiguration.Builder.class).build();
-      return config;
-    } catch (Exception ex) {
-      ex.printStackTrace();
+      return mapper.readValue(reader, CrawlerConfiguration.Builder.class).build();
+    } catch (Exception e) {
+      System.err.println("Have some problem when reading configuration");
+      e.printStackTrace();
       return null;
     }
 
