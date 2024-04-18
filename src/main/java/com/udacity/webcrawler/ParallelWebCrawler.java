@@ -51,21 +51,26 @@ final class ParallelWebCrawler implements WebCrawler {
     ConcurrentMap<String, Integer> counts = new ConcurrentHashMap<>();
     ConcurrentSkipListSet<String> visitedUrls = new ConcurrentSkipListSet<>();
     for (String url : startingUrls) {
-      pool.invoke(new InternalCrawler(url, deadline, maxDepth, counts, visitedUrls));
+      pool.invoke(new RecursiveInternalCrawler(url, deadline, maxDepth, counts, visitedUrls));
     }
 
     return counts.isEmpty() ? (new CrawlResult.Builder().setWordCounts(counts).setUrlsVisited(visitedUrls.size()).build()) : 
       (new CrawlResult.Builder().setWordCounts(WordCounts.sort(counts, popularWordCount)).setUrlsVisited(visitedUrls.size()).build());
   }
 
-  public class InternalCrawler extends RecursiveTask<Boolean> {
+  public class RecursiveInternalCrawler extends RecursiveAction  {
   private String url;
   private Instant deadline;
   private int maxDepth;
   private ConcurrentMap<String, Integer> counts;
   private ConcurrentSkipListSet<String> visitedUrls;
 
-    public InternalCrawler(String url, Instant deadline, int maxDepth, ConcurrentMap<String, Integer> counts, ConcurrentSkipListSet<String> visitedUrls) {
+    public RecursiveInternalCrawler(
+        String url, 
+        Instant deadline, 
+        int maxDepth, 
+        ConcurrentMap<String, Integer> counts, 
+        ConcurrentSkipListSet<String> visitedUrls) {
       this.url = url;
       this.deadline = deadline;
       this.maxDepth = maxDepth;
@@ -74,30 +79,41 @@ final class ParallelWebCrawler implements WebCrawler {
     }
 
     @Override
-    protected Boolean compute() {
+    protected void compute() {
+      // Check depth and timeout
       if (maxDepth == 0 || clock.instant().isAfter(deadline)) {
-        return false;
+        return;
       }
+
+      // Ignore crawling if url is in the list of ignored urls
       for (Pattern ignoreUrlPattern : ignoredUrls) {
         if (ignoreUrlPattern.matcher(url).matches()) {
-          return false;
+          return;
         }
       }
+
+      // Do not crawl again with visited urls
       if (visitedUrls.contains(url)) {
-        return false;
+        return;
       }
       visitedUrls.add(url);
       PageParser.Result result = parserFactory.get(url).parse();
 
-      for (ConcurrentMap.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
-        counts.compute(e.getKey(), (key, val) -> (val == null) ? e.getValue() : e.getValue() + val);
+      // Count words
+      for (Map.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
+        if (counts.containsKey(e.getKey())) {
+          counts.put(e.getKey(), e.getValue() + counts.get(e.getKey()));
+        } else {
+          counts.put(e.getKey(), e.getValue());
+        }
       }
-      List<InternalCrawler> subtasks = new ArrayList<>();
+
+      // Crawl internal links
+      List<RecursiveInternalCrawler> internalCrawlingTasks = new ArrayList<>();
       for (String link : result.getLinks()) {
-        subtasks.add(new InternalCrawler(link, deadline, maxDepth -1, counts, visitedUrls));
+        internalCrawlingTasks.add(new RecursiveInternalCrawler(link, deadline, maxDepth -1, counts, visitedUrls));
       }
-      invokeAll(subtasks);
-      return true;
+      invokeAll(internalCrawlingTasks);
     }
   }
 
