@@ -29,10 +29,19 @@ final class WordCounts {
   static Map<String, Integer> sort(Map<String, Integer> wordCounts, int popularWordCount) {
 
     // TODO: Reimplement this method using only the Stream API and lambdas and/or method references.
-    WordCountComparator comparator = new WordCountComparator();
+    Comparator<Map.Entry<String, Integer>> comparator = Comparator
+        .comparing(Map.Entry<String, Integer>::getValue, Comparator.reverseOrder())  // Compared by value (number of word occurrences)
+        .thenComparing(e -> e.getKey().length(), Comparator.reverseOrder())  // If the number of word occurrences is equal, the longer word has priority
+        .thenComparing(Map.Entry::getKey);  // Finally, if both words have the same number of occurrences and length, sort in alphabetical order
 
-    return wordCounts.entrySet().stream().sorted(comparator).limit(Math.min(popularWordCount, wordCounts.size()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,(key, val) -> key, LinkedHashMap::new));
+    return wordCounts.entrySet().stream()
+        .sorted(comparator)
+        .limit(popularWordCount)
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            Map.Entry::getValue,
+            (e1, e2) -> e1,
+            LinkedHashMap::new));
   }
 
   /**
