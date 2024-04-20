@@ -35,33 +35,33 @@ final class ProfilerImpl implements Profiler {
 
   private Boolean profiledClass(Class<?> klass) {
     List<Method> methods = new ArrayList<>(Arrays.asList(klass.getDeclaredMethods()));
-
-    if (methods.isEmpty()) {
-      return false;
-    }
-    return methods.stream().anyMatch(x -> x.getAnnotation(Profiled.class) != null);
+    return methods.stream().anyMatch(m -> m.isAnnotationPresent(Profiled.class));
   }
 
   @Override
-  public <T> T wrap(Class<T> klass, T delegate) {
-    Objects.requireNonNull(klass);
-    if (!profiledClass(klass)) {
-      throw new IllegalArgumentException(klass.getName() + "doesn't have profiled methods.");
+    public <T> T wrap(Class<T> klass, T delegate) {
+      Objects.requireNonNull(klass, "The class object cannot be null.");
+      if (!profiledClass(klass)) {
+          throw new IllegalArgumentException(klass.getName() + " does not have any profiled methods.");
+      }
+      
+      // TODO: Use a dynamic proxy (java.lang.reflect.Proxy) to "wrap" the delegate in a
+      //       ProfilingMethodInterceptor and return a dynamic proxy from this method.
+      //       See https://docs.oracle.com/javase/10/docs/api/java/lang/reflect/Proxy.html.
+      ProfilingMethodInterceptor interceptor = new ProfilingMethodInterceptor(clock, delegate, state, startTime);
+      Object proxy = Proxy.newProxyInstance(
+        klass.getClassLoader(),
+        new Class<?>[] { klass },
+        (proxyInstance, method, args) -> {
+            if (method.isAnnotationPresent(Profiled.class)) {
+                return interceptor.invoke(proxyInstance, method, args);
+            }
+            return method.invoke(delegate, args);
+        }
+      );
+
+      return klass.cast(proxy);
     }
-
-    // TODO: Use a dynamic proxy (java.lang.reflect.Proxy) to "wrap" the delegate in a
-    //       ProfilingMethodInterceptor and return a dynamic proxy from this method.
-    //       See https://docs.oracle.com/javase/10/docs/api/java/lang/reflect/Proxy.html.
-    ProfilingMethodInterceptor interceptor = new ProfilingMethodInterceptor(clock, delegate, state, startTime);
-
-    Object proxy = Proxy.newProxyInstance(
-            ProfilerImpl.class.getClassLoader(),
-            new Class[]{klass},
-            interceptor
-    );
-
-    return (T) proxy;
-  }
 
   @Override
   public void writeData(Path path) {
