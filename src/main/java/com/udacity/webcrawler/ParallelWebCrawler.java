@@ -48,34 +48,35 @@ final class ParallelWebCrawler implements WebCrawler {
   @Override
   public CrawlResult crawl(List<String> startingUrls) {
     Instant deadline = clock.instant().plus(timeout);
-    ConcurrentMap<String, Integer> counts = new ConcurrentHashMap<>();
+    ConcurrentMap<String, Integer> wordCounts = new ConcurrentHashMap<>();
     ConcurrentSkipListSet<String> visitedUrls = new ConcurrentSkipListSet<>();
     for (String url : startingUrls) {
-      pool.invoke(new RecursiveInternalCrawler(url, deadline, maxDepth, counts, visitedUrls));
+      pool.invoke(new RecursiveInternalCrawler(url, deadline, maxDepth, wordCounts, visitedUrls));
     }
 
-    return counts.isEmpty() ? (new CrawlResult.Builder().setWordCounts(counts).setUrlsVisited(visitedUrls.size()).build()) : 
-      (new CrawlResult.Builder().setWordCounts(WordCounts.sort(counts, popularWordCount)).setUrlsVisited(visitedUrls.size()).build());
+    CrawlResult result = new CrawlResult.Builder().setWordCounts(WordCounts.sort(wordCounts, popularWordCount)).setUrlsVisited(visitedUrls.size()).build();
+
+    return result;
   }
 
   public class RecursiveInternalCrawler extends RecursiveAction  {
   private String url;
   private Instant deadline;
   private int maxDepth;
-  private ConcurrentMap<String, Integer> counts;
-  private ConcurrentSkipListSet<String> visitedUrls;
+  private ConcurrentMap<String, Integer> wordCounts;
+  private ConcurrentSkipListSet<String> crawledUrls;
 
     public RecursiveInternalCrawler(
         String url, 
         Instant deadline, 
         int maxDepth, 
-        ConcurrentMap<String, Integer> counts, 
-        ConcurrentSkipListSet<String> visitedUrls) {
+        ConcurrentMap<String, Integer> wordCounts, 
+        ConcurrentSkipListSet<String> crawledUrls) {
       this.url = url;
       this.deadline = deadline;
       this.maxDepth = maxDepth;
-      this.counts = counts;
-      this.visitedUrls = visitedUrls;
+      this.wordCounts = wordCounts;
+      this.crawledUrls = crawledUrls;
     }
 
     @Override
@@ -92,26 +93,26 @@ final class ParallelWebCrawler implements WebCrawler {
         }
       }
 
-      // Do not crawl again with visited urls
-      if (visitedUrls.contains(url)) {
+      // Do not crawl again this url
+      if (crawledUrls.contains(url)) {
         return;
       }
-      visitedUrls.add(url);
+      crawledUrls.add(url);
       PageParser.Result result = parserFactory.get(url).parse();
 
       // Count words
       for (Map.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
-        if (counts.containsKey(e.getKey())) {
-          counts.put(e.getKey(), e.getValue() + counts.get(e.getKey()));
+        if (wordCounts.containsKey(e.getKey())) {
+          wordCounts.put(e.getKey(), e.getValue() + wordCounts.get(e.getKey()));
         } else {
-          counts.put(e.getKey(), e.getValue());
+          wordCounts.put(e.getKey(), e.getValue());
         }
       }
 
       // Crawl internal links
       List<RecursiveInternalCrawler> internalCrawlingTasks = new ArrayList<>();
       for (String link : result.getLinks()) {
-        internalCrawlingTasks.add(new RecursiveInternalCrawler(link, deadline, maxDepth -1, counts, visitedUrls));
+        internalCrawlingTasks.add(new RecursiveInternalCrawler(link, deadline, maxDepth -1, wordCounts, crawledUrls));
       }
       invokeAll(internalCrawlingTasks);
     }
