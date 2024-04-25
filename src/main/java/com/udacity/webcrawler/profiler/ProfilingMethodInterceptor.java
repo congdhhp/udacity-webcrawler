@@ -44,9 +44,9 @@ final class ProfilingMethodInterceptor implements InvocationHandler {
     Instant start = clock.instant();
     try {
       return method.invoke(delegate, args); // Invoke the target method
-    } catch (InvocationTargetException ex) {
-      // Re-throw the cause of the InvocationTargetException to the caller
-      throw ex.getCause();
+    } catch (Exception e) {
+      // Re-throw the cause of the Exception to the caller
+      throw e.getCause();
     } finally {
       // Compute the duration and record it in the profiling state
       Instant end = clock.instant();
