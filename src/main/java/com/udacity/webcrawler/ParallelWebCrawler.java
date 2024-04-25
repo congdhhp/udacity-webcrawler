@@ -94,13 +94,13 @@ final class ParallelWebCrawler implements WebCrawler {
       }
 
       // Do not crawl again this url
-      // if (crawledUrls.contains(url)) {
-      //   return;
-      // }
-      // crawledUrls.add(url);
-      if (crawledUrls.add(url)) {
+      if (crawledUrls.contains(url)) {
         return;
       }
+      crawledUrls.add(url);
+      // if (crawledUrls.add(url)) {
+      //   return;
+      // }
 
       PageParser.Result result = parserFactory.get(url).parse();
 
