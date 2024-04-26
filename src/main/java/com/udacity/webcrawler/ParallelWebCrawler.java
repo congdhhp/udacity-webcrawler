@@ -93,23 +93,22 @@ final class ParallelWebCrawler implements WebCrawler {
         }
       }
 
-      // Do not crawl again this url
+      // Do not crawl again this url: using ConcurrentSkipListSet -> Thread-safe
       if (crawledUrls.contains(url)) {
         return;
       }
       crawledUrls.add(url);
-      // if (crawledUrls.add(url)) {
-      //   return;
-      // }
 
       PageParser.Result result = parserFactory.get(url).parse();
 
       // Count words
-      for (Map.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
+      for (ConcurrentMap.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
+        // wordCounts.compute(e.getKey(), (k, v) -> (v == null) ? e.getValue() : e.getValue() + v);
         if (wordCounts.containsKey(e.getKey())) {
-          wordCounts.put(e.getKey(), e.getValue() + wordCounts.get(e.getKey()));
+          Integer currentValue = wordCounts.get(e.getKey());
+          wordCounts.put(e.getKey(), currentValue + e.getValue());
         } else {
-          wordCounts.put(e.getKey(), e.getValue());
+            wordCounts.put(e.getKey(), e.getValue());
         }
       }
 
